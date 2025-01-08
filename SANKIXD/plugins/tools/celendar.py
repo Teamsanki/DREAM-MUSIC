@@ -1,51 +1,95 @@
 from pyrogram import Client, filters
-from PIL import Image, ImageEnhance
-from io import BytesIO
-import aiohttp
-import calendar
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from datetime import datetime
+import pymongo
 from SANKIXD import app
+import asyncio
+from config import BOT_TOKEN, API_ID, API_HASH, MONGO_DB_URI, BIRTHDAY_PHOTO
 
-async def make_carbon(code):
-    url = "https://carbonara.solopov.dev/api/cook"
+# Initialize the bot
+app = Client("birthday_bot", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, json={"code": code}) as resp:
-            image_data = await resp.read()
+# MongoDB client setup
+client = pymongo.MongoClient(MONGO_DB_URI)
+db = client["birthday_db"]  # Database name
+users_collection = db["users"]  # Collection to store users' birthdays
 
-    # Open the image using PIL
-    carbon_image = Image.open(BytesIO(image_data))
+# Function to send birthday message
+async def send_birthday_message(user_id, username, user_bday):
+    birthday_message = (
+        f"🎉🌟 **Happy Birthday to {username}!** 🌟🎉\n\n"
+        f"🎂 **It's your special day!** 🎂\n"
+        f"💖 **We wish you a fantastic year ahead!** 💖\n\n"
+        f"🎈 May happiness, success, and love always brighten your way. 🎈\n"
+        f"🎁 **Enjoy every moment!** 🥳"
+    )
+    
+    # Inline button for user's profile
+    buttons = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("🎉 Wish {username} 🎉", url=f"tg://user?id={user_id}")]]
+    )
 
-    # Increase brightness
-    enhancer = ImageEnhance.Brightness(carbon_image)
-    bright_image = enhancer.enhance(1.7)  # Adjust the enhancement factor as needed
-
-    # Save the modified image to BytesIO object with increased quality
-    output_image = BytesIO()
-    bright_image.save(output_image, format='PNG', quality=95)  # Adjust quality as needed
-    output_image.name = "carbon.png"
-    return output_image
-
-
-@app.on_message(filters.command("calendar", prefixes="/"))
-async def send_calendar(_, message):
-    # Extract the year from the command arguments
-    command_parts = message.text.split(" ")
-    if len(command_parts) == 2:
+    # Send the birthday message to user and in the group (if bot is part of a group)
+    async for dialog in app.get_dialogs():
         try:
-            year = int(command_parts[1])
-        except ValueError:
-            await message.reply("Invalid year format. Please use /calendar <year>")
-            return
-    else:
-        await message.reply("Please provide a valid year after /calendar command.")
+            if dialog.chat.type in ["group", "supergroup"]:
+                await app.send_photo(
+                    chat_id=dialog.chat.id,
+                    photo=BIRTHDAY_PHOTO,
+                    caption=birthday_message,
+                    reply_markup=buttons
+                )
+        except Exception as e:
+            print(f"Failed to send message to {dialog.chat.title}: {e}")
+    
+    # Send direct message (DM) to the user
+    await app.send_photo(
+        chat_id=user_id,
+        photo=BIRTHDAY_PHOTO,
+        caption=birthday_message,
+        reply_markup=buttons
+    )
+
+
+# Command to edit user's birthday
+@app.on_message(filters.command("editbdy", prefixes="/"))
+async def edit_birthday(_, message):
+    user_id = message.from_user.id
+    user = users_collection.find_one({"user_id": user_id})
+    
+    if not user:
+        await message.reply("You haven't set your birthday yet. Please use /setbdy to set it first.")
         return
+    
+    # Show current birthday date
+    current_bday = user.get("birthday", "not set")
+    await message.reply(f"Your current birthday is set as {current_bday}.\n"
+                        "To update, please enter the new birthday in the format DD-MM-YYYY.")
+    
+    # Ask for new date input
+    @app.on_message(filters.regex(r"^\d{2}-\d{2}-\d{4}$"))
+    async def update_birthday(_, message):
+        new_bday = message.text.strip()
+        if not new_bday:
+            await message.reply("Please enter a valid date in the format DD-MM-YYYY.")
+            return
+        
+        # Update in MongoDB
+        users_collection.update_one(
+            {"user_id": user_id},
+            {"$set": {"birthday": new_bday}},
+        )
 
-    # Generate the calendar for the specified year
-    cal = calendar.TextCalendar()
-    full_year_calendar = cal.formatyear(year, 2, 1, 1, 3)
+        # Loading animation to show the user the process is ongoing
+        loading_message = await message.reply("Updating your birthday...")
 
-    # Generate the Carbon image for the calendar
-    carbon_image = await make_carbon(full_year_calendar)
+        # Show loading animation (use dashes as loading effect)
+        loading_effects = ["-", "--", "---", "----", "-----", "------", "-------"]
+        for effect in loading_effects:
+            await asyncio.sleep(1)
+            await loading_message.edit_text(f"Updating your birthday {effect}")
+        
+        # Send confirmation message
+        await message.reply(f"Your birthday has been updated to {new_bday}. 🎉")
+        await send_birthday_message(user_id, user['username'], new_bday)
 
-    # Send the image as a reply to the user
-    await app.send_photo(message.chat.id, carbon_image, caption=f"Calendar for the year {year}")
