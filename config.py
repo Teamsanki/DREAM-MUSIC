@@ -24,7 +24,6 @@ BOT_NAME = getenv("BOT_NAME" , "Nexiko")
 # ---------------------------------------------------------
 ASSUSERNAME = getenv("ASSUSERNAME" , "MissYumikoo")
 # ---------------------------------------------------------
-BIRTHDAY_PHOTO = getenv("BIRTHDAY_PHOTO" , "https://i.pinimg.com/736x/85/c9/ec/85c9ec3e5230db0d7125a1fc947364fd.jpg")
 
 
 #---------------------------------------------------------------
