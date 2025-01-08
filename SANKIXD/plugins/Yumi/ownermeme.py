@@ -5,7 +5,7 @@ import time
 from threading import Thread
 
 # Owner ID (replace with your actual Telegram user ID)
-OWNER_ID = 7877197608  # Replace with your Telegram user ID
+OWNER_ID = 7548678061  # Replace with your Telegram user ID
 
 # Channel username
 CHANNEL_USERNAME = "@SANKI_MEMES"  # Replace with your channel username
