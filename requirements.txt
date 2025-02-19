@@ -40,7 +40,7 @@ spotipy
 tgcrypto
 telegraph
 unidecode
-yt-dlp==2025.01.15
+yt-dlp==2025.2.19
 youtube-search
 youtube-search-python
 gtts
